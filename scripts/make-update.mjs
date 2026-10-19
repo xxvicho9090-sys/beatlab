@@ -27,7 +27,7 @@ async function collect(dirUrl, prefix = '') {
   const out = {};
   for (const entry of await readdir(dirUrl, { withFileTypes: true })) {
     const rel = prefix + entry.name;
-    if (rel === 'bg-data' || rel === 'update') continue;
+    if (rel === 'bg-data' || rel === 'update' || rel === 'Beatlab.apk') continue;
     const url = new URL(entry.name + (entry.isDirectory() ? '/' : ''), dirUrl);
     if (entry.isDirectory()) Object.assign(out, await collect(url, rel + '/'));
     else out[rel] = new Uint8Array(await readFile(url));

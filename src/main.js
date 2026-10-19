@@ -27,6 +27,17 @@ const IC = {
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
 };
 
+let installEv = null;
+const standalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const showInstall = () => !native && !standalone();
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEv = e; if (S.beat) render(); });
+window.addEventListener('appinstalled', () => { installEv = null; toast('Beatlab instalada'); if (S.beat) render(); });
+async function doInstall() {
+  if (installEv) { installEv.prompt(); await installEv.userChoice.catch(() => {}); installEv = null; render(); }
+  else if (isIOS) sheet('<div class="mono">iPhone / iPad</div><h2>Instalar</h2><p class="empty" style="text-align:left">Toca el botón <b>Compartir</b> de Safari y elige <b>Añadir a pantalla de inicio</b>.</p>');
+  else sheet('<div class="mono">Instalar</div><h2>Instalar Beatlab</h2><p class="empty" style="text-align:left">Abre el menú del navegador (⋮) y elige <b>Instalar aplicación</b> o <b>Añadir a pantalla de inicio</b>. En Android también puedes descargar la APK.</p>');
+}
 const S = { beat: null, lock: {}, bar: 0, playing: false, mode: 'loop', lib: [], dirty: null };
 let ctx = null, graph = null, timer = null, raf = 0, t0 = 0, nextStep = 0, plan = null;
 
@@ -171,6 +182,7 @@ function render() {
   sel.innerHTML = `
   <div class="top"><div><div class="mono">Estudio de beats</div><h1 class="logo">BEATLAB</h1></div>
     <button class="chip-v ${up.state === 'ready' ? 'up' : ''}" id="ver">${up.state === 'ready' ? 'Actualizar' : 'v' + __APP_VERSION__}</button></div>
+  ${showInstall() ? `<div class="info" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:150px"><b style="font-size:22px">Instala Beatlab</b><p>Úsala como app, sin conexión.</p></div><button class="wide pri" id="inst" style="width:auto;padding:0 18px;margin:0">Instalar</button><a class="wide" href="./Beatlab.apk" download style="width:auto;padding:0 18px;margin:0;display:grid;place-items:center;color:inherit;text-decoration:none">APK Android</a></div>` : ''}
   <div class="genres" role="tablist">${ORDER.map((id) => `<button class="genre ${id === b.genre ? 'on' : ''}" data-g="${id}">${PRESETS[id].name}</button>`).join('')}</div>
   <div class="info"><b>${esc(P.name)}</b><div class="mono" style="margin-top:2px">${esc(P.city)} · ${esc(P.era)}</div><p>Referentes del estilo: ${esc(P.refs)}.</p></div>
   <div class="grid2">
@@ -222,6 +234,7 @@ function bind() {
     const id = e.target.closest('button')?.id;
     if (id === 'play') { if (S.playing) stop(); else { S.follow = true; start('loop'); } }
     if (id === 'gen') { ensureCtx(); S.follow = true; newBeat({}); if (!S.playing) start('loop'); }
+    if (id === 'inst') doInstall();
     if (id === 'save') save();
     if (id === 'lib') openLibrary();
     if (id === 'exp') openExport();
@@ -257,5 +270,6 @@ async function save() {
   S.lib = await listBeats().catch(() => []);
   onUpdateStatus((s) => { if (s.state === 'ready' || s.state === 'latest') { const v = $('#ver'); if (v) { v.textContent = s.state === 'ready' ? 'Actualizar' : 'v' + __APP_VERSION__; v.classList.toggle('up', s.state === 'ready'); } } });
   render(); notifyReady(); startUpdates();
+  if (!native && 'serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('./sw.js').catch(() => {});
   document.addEventListener('visibilitychange', () => { if (document.hidden && S.playing) stop(); });
 })();
