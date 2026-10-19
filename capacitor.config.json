@@ -1,0 +1,16 @@
+{
+  "appId": "com.beatlab.rap",
+  "appName": "Beatlab",
+  "webDir": "dist",
+  "android": { "backgroundColor": "#0B0B0E" },
+  "plugins": {
+    "CapacitorUpdater": {
+      "autoUpdate": false,
+      "statsUrl": "",
+      "appReadyTimeout": 10000,
+      "autoDeleteFailed": true,
+      "autoDeletePrevious": true,
+      "resetWhenUpdate": true
+    }
+  }
+}

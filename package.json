@@ -1,0 +1,28 @@
+{
+  "name": "beatlab",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build && node scripts/make-update.mjs",
+    "apk": "npm run build && node scripts/android-icons.mjs && npx cap sync android && cd android && gradlew.bat assembleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/share": "^8.0.3",
+    "@capgo/capacitor-updater": "^8.53.0",
+    "@fontsource-variable/big-shoulders-display": "^5.2.0",
+    "@fontsource-variable/hanken-grotesk": "^5.2.0",
+    "@fontsource-variable/jetbrains-mono": "^5.2.0",
+    "fflate": "^0.8.3",
+    "idb": "^8.0.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
+    "sharp": "^0.35.5",
+    "vite": "^5.4.21"
+  }
+}
