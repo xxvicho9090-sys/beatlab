@@ -154,7 +154,7 @@ function voice(prev, notes) { // inversión más cercana al acorde anterior, den
   return best;
 }
 
-export const emptyMix = () => Object.fromEntries(TRACKS.map((t) => [t, { vol: { kick: 0.9, snare: 0.8, clap: 0.65, hat: 0.5, ohat: 0.45, perc: 0.45, bass: 0.75, lead: 0.6, chord: 0.55 }[t], mute: false }]));
+export const emptyMix = () => Object.fromEntries(TRACKS.map((t) => [t, { vol: { kick: 0.72, snare: 0.75, clap: 0.6, hat: 0.5, ohat: 0.45, perc: 0.45, bass: 0.5, lead: 0.6, chord: 0.55 }[t], mute: false }]));
 
 // opts: { seed, bpm, key, scale, lock:{track:true}, prev: beat (para conservar pistas bloqueadas) }
 export function generate(id, opts = {}) {
