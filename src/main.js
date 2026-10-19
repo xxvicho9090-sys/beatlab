@@ -8,6 +8,8 @@ import { Share } from '@capacitor/share';
 import { TRACKS, TRACK_LABEL, createGraph, applyMix, scheduleSteps, songPlan, sectionAt, preview, startVinyl, renderBeat } from './audio.js';
 import { PRESETS, ORDER, SCALES, KEYS, generate, rerollTrack } from './gen.js';
 import { listBeats, saveBeat, deleteBeat, importBeats, initStore, getKV, setKV } from './store.js';
+import { zipSync } from 'fflate';
+import { beatToMidi } from './midi.js';
 import { startUpdates, checkForUpdate, applyNow, onUpdateStatus, getUpdateStatus, notifyReady, applyPendingOnColdStart } from './updater.js';
 
 const native = Capacitor.isNativePlatform();
@@ -47,7 +49,7 @@ const scaleOf = (b) => SCALES[b.scale].i;
 
 // ---------------- audio en vivo ----------------
 function ensureCtx() { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' }); if (ctx.state !== 'running') ctx.resume(); return ctx; }
-function buildGraph() { if (graph) { try { graph.out.disconnect(); } catch { /* ya desconectado */ } } graph = createGraph(ensureCtx(), S.beat); return graph; }
+function buildGraph() { if (graph) { try { graph.out.disconnect(); } catch { /* ya desconectado */ } } graph = createGraph(ensureCtx(), S.beat); graph.ref = S.beat.kit; return graph; }
 function start(mode = 'loop') {
   stop(true); S.mode = mode; S.playing = true; plan = songPlan(S.beat);
   buildGraph(); t0 = ctx.currentTime + 0.08; nextStep = 0;
@@ -70,8 +72,9 @@ function frame() {
   if (!S.playing) return;
   const sd = 60 / S.beat.bpm / 4, s = Math.max(0, Math.floor((ctx.currentTime - t0) / sd)), idx = s % S.beat.steps, bar = Math.floor(idx / 16);
   if (bar !== S.bar && S.mode === 'loop' && S.follow !== false) { S.bar = bar; renderGrid(); }
-  document.querySelectorAll('.cell.play').forEach((c) => c.classList.remove('play'));
-  if (Math.floor(idx / 16) === S.bar) document.querySelectorAll(`.cell[data-s="${idx % 16}"]`).forEach((c) => c.classList.add('play'));
+  drawViz();
+  document.querySelectorAll('.cell.ph').forEach((c) => c.classList.remove('ph'));
+  if (Math.floor(idx / 16) === S.bar) document.querySelectorAll(`.cell[data-s="${idx % 16}"]`).forEach((c) => c.classList.add('ph'));
   if (S.mode === 'song') { const sec = sectionAt(plan, Math.floor(s / S.beat.steps)); document.querySelectorAll('.song span').forEach((e, i) => e.classList.toggle('on', plan.secs[i] === sec)); }
   raf = requestAnimationFrame(frame);
 }
@@ -84,7 +87,7 @@ function cellOn(t, s) {
   return b[t].some((e) => e.s === s);
 }
 function toggleCell(t, s) {
-  const b = S.beat;
+  pushHist(); const b = S.beat;
   if (DRUMS.includes(t)) {
     if (b.drum[t][s] > 0) { b.drum[t][s] = 0; if (t === 'hat') b.drum.roll[s] = 0; } else { b.drum[t][s] = t === 'hat' || t === 'perc' ? 0.7 : 0.9; if (graph && !S.playing) preview(graph, t, b); }
   } else {
@@ -100,11 +103,60 @@ function toggleCell(t, s) {
   touched();
 }
 let saveT = 0;
+// ---- historial (deshacer / rehacer) ----
+const hist = { u: [], r: [] };
+function pushHist() { hist.u.push(JSON.stringify(S.beat)); if (hist.u.length > 40) hist.u.shift(); hist.r = []; }
+function restore(json) { S.beat = JSON.parse(json); if (S.playing) { const keep = S.mode; start(keep); } persistCurrent(); render(); }
+function undo() { if (!hist.u.length) return toast('Nada que deshacer'); hist.r.push(JSON.stringify(S.beat)); restore(hist.u.pop()); }
+function redo() { if (!hist.r.length) return toast('Nada que rehacer'); hist.u.push(JSON.stringify(S.beat)); restore(hist.r.pop()); }
+function mutate() {
+  pushHist(); const b = S.beat, r = Math.random, D = b.drum;
+  ['kick', 'clap', 'hat', 'ohat', 'perc'].forEach((t) => { for (let k = 0; k < 2; k++) { const s = Math.floor(r() * 64); if (t === 'kick' && s % 16 === 0) continue; if (r() < (t === 'hat' ? 0.55 : 0.3)) { D[t][s] = D[t][s] > 0 ? 0 : t === 'hat' ? 0.6 : 0.8; if (t === 'hat') D.roll[s] = 0; } } });
+  b.lead.forEach((e) => { if (r() < 0.2) e.n += [-2, -1, 1, 2][Math.floor(r() * 4)]; });
+  b.bass.forEach((e) => { if (e.l >= 2 && r() < 0.12) e.to = e.n + [-2, 2, 5, 7][Math.floor(r() * 4)]; });
+  touched(); toast('Patrón mutado');
+}
+let taps = [];
+function tapTempo() {
+  const now = performance.now(); if (taps.length && now - taps[taps.length - 1] > 2000) taps = []; taps.push(now); taps = taps.slice(-6);
+  if (taps.length < 2) return toast('Sigue tocando al ritmo');
+  const avg = (taps[taps.length - 1] - taps[0]) / (taps.length - 1); S.beat.bpm = Math.max(55, Math.min(170, Math.round(60000 / avg)));
+  if (S.playing) start(S.mode); persistCurrent(); const el = $('#bpm'); if (el) el.textContent = S.beat.bpm;
+}
+function ensureGraph() { ensureCtx(); if (!graph || graph.ref !== S.beat.kit) { if (graph && !S.playing) { try { graph.out.disconnect(); } catch { /* ok */ } } graph = createGraph(ctx, S.beat); graph.ref = S.beat.kit; } return graph; }
+// ---- pads en vivo: tocar, y grabar cuantizado si REC está activo ----
+function hitPad(t) {
+  const g = ensureGraph(); preview(g, t, S.beat); const el = document.querySelector(`[data-pad="${t}"]`); el?.classList.add('hit'); setTimeout(() => el?.classList.remove('hit'), 90);
+  if (!(S.playing && S.rec)) return;
+  const sd = 60 / S.beat.bpm / 4, s = Math.round((ctx.currentTime - t0) / sd) % S.beat.steps;
+  if (!S.recStarted) { pushHist(); S.recStarted = true; }
+  const b = S.beat;
+  if (DRUMS.includes(t)) b.drum[t][s] = t === 'hat' || t === 'perc' ? 0.7 : 0.9;
+  else if (!b[t].some((e) => e.s === s)) { const bar = Math.floor(s / 16), d = b.prog[bar % b.prog.length], sc = scaleOf(b), at = (x) => sc[((x % 7) + 7) % 7] + 12 * Math.floor(x / 7); if (t === 'bass') b.bass.push({ s, l: 2, n: at(d) % 12, v: 0.9 }); else if (t === 'lead') b.lead.push({ s, l: 2, n: at(d + 2) + 12, v: 0.8 }); else b.chord.push({ s, l: 8, n: [at(d), at(d + 2), at(d + 4)], v: 0.8 }); }
+  persistCurrent();
+}
+// ---- efectos de actuación (mantener presionado) ----
+let fxTimer = 0;
+function fxStart(kind) {
+  const g = ensureGraph(), now = ctx.currentTime, sd = 60 / S.beat.bpm / 4;
+  if (kind === 'stutter') { g.out.gain.cancelScheduledValues(now); for (let k = 0; k < 64; k++) g.out.gain.setValueAtTime(k % 2 ? 0.92 : 0.0001, now + k * sd * 0.5); }
+  if (kind === 'eco') g.thrD.gain.setTargetAtTime(0.6, now, 0.01);
+  if (kind === 'verb') g.thrR.gain.setTargetAtTime(0.35, now, 0.02);
+  if (kind === 'radio') g.lp.frequency.setTargetAtTime(1400, now, 0.03);
+}
+function fxStop(kind) {
+  if (!graph) return; const now = ctx.currentTime;
+  if (kind === 'stutter') { graph.out.gain.cancelScheduledValues(now); graph.out.gain.setTargetAtTime(0.92, now, 0.01); }
+  if (kind === 'eco') graph.thrD.gain.setTargetAtTime(0, now + 0.05, 0.05);
+  if (kind === 'verb') graph.thrR.gain.setTargetAtTime(0, now + 0.3, 0.3);
+  if (kind === 'radio') graph.lp.frequency.setTargetAtTime(graph.baseLp, now, 0.08);
+}
 function touched() { renderGrid(); if (S.beat.id) { clearTimeout(saveT); saveT = setTimeout(async () => { await saveBeat(S.beat); S.lib = await listBeats(); }, 700); } persistCurrent(); }
 let curT = 0;
 function persistCurrent() { clearTimeout(curT); curT = setTimeout(() => setKV('current', JSON.parse(JSON.stringify(S.beat))).catch(() => {}), 500); }
 
 function newBeat(opts = {}) {
+  pushHist();
   const prev = S.beat;
   const id = opts.genre || prev?.genre || 'trap';
   const b = generate(id, { bpm: opts.bpm, key: opts.key, scale: opts.scale, lock: S.lock, prev: Object.keys(S.lock).some((k) => S.lock[k]) ? prev : null });
@@ -118,6 +170,17 @@ async function exportWav(mode) {
   toast('Renderizando…'); const bytes = await renderBeat(S.beat, mode);
   const name = `${S.beat.name.replace(/[^\w\-· ]+/g, '').replace(/[ ·]+/g, '_')}_${S.beat.bpm}bpm${mode === 'song' ? '_cancion' : ''}.wav`;
   await deliver(name, bytes, 'audio/wav');
+}
+const fileBase = () => `${S.beat.name.replace(/[^w-· ]+/g, '').replace(/[ ·]+/g, '_')}_${S.beat.bpm}bpm`;
+async function exportMidi() { await deliver(`${fileBase()}.mid`, beatToMidi(S.beat), 'audio/midi'); }
+async function exportStems() {
+  const files = {}; const full = await renderBeat(S.beat, 'loop'); files['00_beat_completo.wav'] = [full, { level: 0 }];
+  for (let i = 0; i < TRACKS.length; i++) {
+    const t = TRACKS[i]; toast(`Stem ${i + 1}/${TRACKS.length}: ${TRACK_LABEL[t]}…`);
+    const b = JSON.parse(JSON.stringify(S.beat)); TRACKS.forEach((o) => { b.mix[o].mute = o !== t; });
+    files[`${String(i + 1).padStart(2, '0')}_${TRACK_LABEL[t].replace(/[^w]+/g, '_')}.wav`] = [await renderBeat(b, 'loop'), { level: 0 }];
+  }
+  await deliver(`${fileBase()}_stems.zip`, zipSync(files), 'application/zip');
 }
 async function deliver(name, bytes, type) {
   if (native) {
@@ -156,8 +219,8 @@ async function openLibrary() {
 }
 function openExport() {
   sheet(`<div class="mono">Calidad estudio · WAV 44,1 kHz</div><h2>Exportar</h2>
-    <button class="wide pri" data-m="loop">Loop de 4 compases</button><button class="wide" data-m="song">Canción completa (intro, versos, estribillos, puente)</button>`, (bg) => {
-    bg.addEventListener('click', async (e) => { const m = e.target.closest('[data-m]')?.dataset.m; if (!m) return; bg.remove(); try { await exportWav(m); } catch (err) { console.error(err); toast('No se pudo exportar'); } });
+    <button class="wide pri" data-m="loop">Loop de 4 compases</button><button class="wide" data-m="song">Canción completa (intro, versos, estribillos, puente)</button><button class="wide" data-m="stems">Stems por pista (ZIP de WAV)</button><button class="wide" data-m="midi">MIDI para tu DAW (.mid)</button>`, (bg) => {
+    bg.addEventListener('click', async (e) => { const m = e.target.closest('[data-m]')?.dataset.m; if (!m) return; bg.remove(); try { if (m === 'stems') await exportStems(); else if (m === 'midi') await exportMidi(); else await exportWav(m); } catch (err) { console.error(err); toast('No se pudo exportar'); } });
   });
 }
 function openSettings() {
@@ -177,37 +240,63 @@ function openSettings() {
 
 // ---------------- render ----------------
 function render() {
-  const b = S.beat, P = PRESETS[b.genre], up = getUpdateStatus();
-  const sel = $('#app');
-  sel.innerHTML = `
-  <div class="top"><div><div class="mono">Estudio de beats</div><h1 class="logo">BEATLAB</h1></div>
-    <button class="chip-v ${up.state === 'ready' ? 'up' : ''}" id="ver">${up.state === 'ready' ? 'Actualizar' : 'v' + __APP_VERSION__}</button></div>
-  ${showInstall() ? `<div class="info" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:150px"><b style="font-size:22px">Instala Beatlab</b><p>Úsala como app, sin conexión.</p></div><button class="wide pri" id="inst" style="width:auto;padding:0 18px;margin:0">Instalar</button><a class="wide" href="./Beatlab.apk" download style="width:auto;padding:0 18px;margin:0;display:grid;place-items:center;color:inherit;text-decoration:none">APK Android</a></div>` : ''}
-  <div class="genres" role="tablist">${ORDER.map((id) => `<button class="genre ${id === b.genre ? 'on' : ''}" data-g="${id}">${PRESETS[id].name}</button>`).join('')}</div>
-  <div class="info"><b>${esc(P.name)}</b><div class="mono" style="margin-top:2px">${esc(P.city)} · ${esc(P.era)}</div><p>Referentes del estilo: ${esc(P.refs)}.</p></div>
-  <div class="grid2">
-    <div class="card"><div class="mono">BPM</div><div class="big"><button class="step" data-bpm="-1" aria-label="Menos BPM">−</button><span id="bpm">${b.bpm}</span><button class="step" data-bpm="1" aria-label="Más BPM">+</button></div>
-      <div class="bar"><i style="width:${Math.round(((b.bpm - 55) / 115) * 100)}%"></i></div></div>
-    <div class="card"><div class="mono">Tonalidad</div><div class="big"><span>${esc(keyName(b))}</span></div>
-      <select class="key" id="key" aria-label="Tonalidad">${KEYS.map((k, i) => `<option value="${i}" ${i === b.key ? 'selected' : ''}>${k}</option>`).join('')}</select></div>
-  </div>
-  <div class="card"><div class="mono">Escala</div><select class="key" id="scale" aria-label="Escala">${Object.entries(SCALES).map(([k, v]) => `<option value="${k}" ${k === b.scale ? 'selected' : ''}>${v.n}</option>`).join('')}</select>
-    <div class="mono" style="margin-top:12px">Swing · ${Math.round(b.swing * 100)}%</div><input type="range" id="swing" min="50" max="72" value="${Math.round(b.swing * 100)}" aria-label="Swing"></div>
-  <div class="sec-h"><div class="mono">Patrón · 16 pasos</div><div class="tabs">${[0, 1, 2, 3].map((i) => `<button class="tab ${i === S.bar ? 'on' : ''}" data-bar="${i}">${i + 1}</button>`).join('')}</div></div>
-  <div class="seq" id="seq"></div>
-  <div class="sec-h"><div class="mono">Mezcla</div></div>
-  <div class="mix">${TRACKS.map((t) => `<div class="mrow" data-t="${t}"><button class="n" data-a="prev" style="text-align:left">${TRACK_LABEL[t]}</button>
-    <input type="range" min="0" max="100" value="${Math.round(b.mix[t].vol * 100)}" data-vol="${t}" aria-label="Volumen ${TRACK_LABEL[t]}">
-    <button class="ib ${b.mix[t].mute ? 'on' : ''}" data-a="mute" aria-label="Silenciar ${TRACK_LABEL[t]}">${IC.mute}</button>
-    <button class="ib ${S.lock[t] ? 'on' : ''}" data-a="lock" aria-label="Bloquear ${TRACK_LABEL[t]}">${IC.lock}</button>
-    <button class="ib" data-a="dice" aria-label="Regenerar ${TRACK_LABEL[t]}">${IC.dice}</button></div>`).join('')}</div>
-  <div class="sec-h"><div class="mono">Estructura de canción</div></div>
-  <div class="song">${songPlan(b).secs.map((s) => `<span>${s.name}${s.loops > 1 ? ' ×' + s.loops : ''}</span>`).join('')}</div>
-  <div class="dock"><div class="dock-in">
-    <div class="dock-top"><button id="save" class="${b.id ? 'saved' : ''}">${b.id ? IC.heartF : IC.heart}${b.id ? 'Guardado' : 'Guardar'}</button><button id="lib">${IC.lib}Mis beats</button><button id="exp">${IC.dl}Exportar</button><button id="cfg">${IC.cog}Ajustes</button></div>
-    <div class="dock-main"><button class="play" id="play" aria-label="${S.playing ? 'Detener' : 'Reproducir'}">${S.playing ? IC.stop : IC.play}</button><button class="gen" id="gen">GENERAR BEAT</button></div>
-  </div></div>`;
-  renderGrid(); bind();
+  const b = S.beat, P = PRESETS[b.genre], up = getUpdateStatus(), tab = S.tab || 'crear';
+  let noInst = false; try { noInst = localStorage.getItem('bl.noinst') === '1'; } catch { /* sin almacenamiento */ }
+  const crear = `
+    <div class="genres" role="tablist">${ORDER.map((id) => `<button class="genre ${id === b.genre ? 'on' : ''}" data-g="${id}">${PRESETS[id].name}</button>`).join('')}</div>
+    <div class="info"><b>${esc(P.name)}</b><div class="mono" style="margin-top:2px">${esc(P.city)} · ${esc(P.era)}</div><p>Referentes del estilo: ${esc(P.refs)}.</p></div>
+    <div class="grid2">
+      <div class="card"><div class="mono" style="display:flex;justify-content:space-between;align-items:center">BPM<button class="mini" id="tap" style="min-height:32px;padding:0 10px;font-size:11px">TAP</button></div><div class="big"><button class="step" data-bpm="-1" aria-label="Menos BPM">−</button><span id="bpm">${b.bpm}</span><button class="step" data-bpm="1" aria-label="Más BPM">+</button></div>
+        <div class="bar"><i style="width:${Math.round(((b.bpm - 55) / 115) * 100)}%"></i></div></div>
+      <div class="card"><div class="mono">Tonalidad</div><div class="big"><span>${esc(keyName(b))}</span></div>
+        <select class="key" id="key" aria-label="Tonalidad">${KEYS.map((k, i) => `<option value="${i}" ${i === b.key ? 'selected' : ''}>${k}</option>`).join('')}</select></div>
+    </div>
+    <div class="card"><div class="mono">Escala</div><select class="key" id="scale" aria-label="Escala">${Object.entries(SCALES).map(([k, v]) => `<option value="${k}" ${k === b.scale ? 'selected' : ''}>${v.n}</option>`).join('')}</select>
+      <div class="mono" style="margin-top:12px">Swing · ${Math.round(b.swing * 100)}%</div><input type="range" id="swing" min="50" max="72" value="${Math.round(b.swing * 100)}" aria-label="Swing"></div>
+    <div class="sec-h"><div class="mono">Estructura de canción</div></div>
+    <div class="song">${songPlan(b).secs.map((s) => `<span>${s.name}${s.loops > 1 ? ' ×' + s.loops : ''}</span>`).join('')}</div>`;
+  const patron = `
+    <div class="tools"><button class="mini" id="undo">↶ Deshacer</button><button class="mini" id="redo">↷ Rehacer</button><button class="mini" id="mut">Mutar</button></div>
+    <div class="sec-h"><div class="mono">Compás</div><div class="tabs">${[0, 1, 2, 3].map((i) => `<button class="tab ${i === S.bar ? 'on' : ''}" data-bar="${i}">${i + 1}</button>`).join('')}</div></div>
+    <div class="seq" id="seq"></div>
+    <p class="hint">Toca una casilla para activarla o quitarla. Toca el nombre de la pista para escucharla.</p>`;
+  const pads = `
+    <div class="sec-h"><div class="mono">Pads · toca y graba</div><button class="mini ${S.rec ? 'pri' : ''}" id="rec" aria-pressed="${!!S.rec}">● REC ${S.rec ? 'activo' : ''}</button></div>
+    <div class="pads3">${TRACKS.map((t) => `<button class="pad" data-pad="${t}">${TRACK_LABEL[t]}</button>`).join('')}</div>
+    <p class="hint">Con el beat sonando y REC activo, lo que toques queda grabado en el patrón, ajustado al compás.</p>
+    <div class="sec-h"><div class="mono">Efectos · mantén presionado</div></div>
+    <div class="pads4">${[['stutter', 'Stutter'], ['eco', 'Eco'], ['verb', 'Reverb'], ['radio', 'Radio']].map(([k, n]) => `<button class="pad fx" data-fx="${k}">${n}</button>`).join('')}</div>`;
+  const mezcla = `
+    <div class="mix">${TRACKS.map((t) => `<div class="mrow" data-t="${t}"><button class="n" data-a="prev" style="text-align:left">${TRACK_LABEL[t]}</button>
+      <input type="range" min="0" max="100" value="${Math.round(b.mix[t].vol * 100)}" data-vol="${t}" aria-label="Volumen ${TRACK_LABEL[t]}">
+      <button class="ib ${b.mix[t].mute ? 'on' : ''}" data-a="mute" aria-label="Silenciar ${TRACK_LABEL[t]}">${IC.mute}</button>
+      <button class="ib ${S.lock[t] ? 'on' : ''}" data-a="lock" aria-label="Bloquear ${TRACK_LABEL[t]}">${IC.lock}</button>
+      <button class="ib" data-a="dice" aria-label="Regenerar ${TRACK_LABEL[t]}">${IC.dice}</button></div>`).join('')}</div>
+    <p class="hint">Candado: esa pista se conserva al generar. Dado: regenera solo esa pista.</p>`;
+  $('#app').innerHTML = `
+  <header class="top"><div><h1 class="logo">BEATLAB</h1></div>
+    <div class="hbtns"><button class="chip-v ${up.state === 'ready' ? 'up' : ''}" id="ver">${up.state === 'ready' ? 'Actualizar' : 'v' + __APP_VERSION__}</button>
+    <button class="ib" id="lib" aria-label="Mis beats">${IC.lib}</button><button class="ib" id="exp" aria-label="Exportar">${IC.dl}</button><button class="ib" id="cfg" aria-label="Ajustes">${IC.cog}</button></div></header>
+  ${showInstall() && !noInst ? `<div class="inst"><span>Instala Beatlab como app</span><button class="mini pri" id="inst">Instalar</button><a class="mini" href="./Beatlab.apk" download>APK</a><button class="mini x" id="instx" aria-label="Cerrar">✕</button></div>` : ''}
+  <section class="hero"><div class="hero-t"><div><div class="mono">${esc(P.name)} · ${b.bpm} BPM · ${esc(keyName(b))}</div><div class="hero-n">${esc(b.name)}</div></div></div><canvas id="viz" width="640" height="96" aria-hidden="true"></canvas></section>
+  <nav class="seg" role="tablist">${[['crear', 'Crear'], ['patron', 'Patrón'], ['pads', 'Pads'], ['mezcla', 'Mezcla']].map(([k, n]) => `<button role="tab" aria-selected="${tab === k}" class="${tab === k ? 'on' : ''}" data-tab="${k}">${n}</button>`).join('')}</nav>
+  <main>${tab === 'crear' ? crear : tab === 'patron' ? patron : tab === 'pads' ? pads : mezcla}</main>
+  <div class="dock"><div class="dock-in"><div class="dock-main">
+    <button class="play" id="play" aria-label="${S.playing ? 'Detener' : 'Reproducir'}">${S.playing ? IC.stop : IC.play}</button>
+    <button class="gen" id="gen">GENERAR BEAT</button>
+    <button class="play ${b.id ? 'saved' : ''}" id="save" aria-label="${b.id ? 'Guardado' : 'Guardar beat'}">${b.id ? IC.heartF : IC.heart}</button>
+  </div></div></div>`;
+  renderGrid(); bind(); drawViz();
+}
+function drawViz() {
+  const cv = $('#viz'); if (!cv) return; const c = cv.getContext('2d'), w = cv.width, h = cv.height, n = 48, bw = w / n;
+  c.clearRect(0, 0, w, h);
+  const data = new Uint8Array(64); if (graph?.an && S.playing) graph.an.getByteFrequencyData(data);
+  for (let i = 0; i < n; i++) {
+    const v = S.playing ? Math.pow(data[Math.min(63, Math.floor(i * 0.9))] / 255, 1.4) : 0.06 + 0.04 * Math.sin(i * 0.7);
+    const bh = Math.max(3, v * h * 0.95); c.fillStyle = i % 4 === 0 ? '#FF4B2B' : '#3A3A46'; if (S.playing && v > 0.35) c.fillStyle = '#FF4B2B';
+    c.fillRect(i * bw + 2, h - bh, bw - 4, bh);
+  }
 }
 function renderGrid() {
   const b = S.beat, o = S.bar * 16, seq = $('#seq'); if (!seq) return;
@@ -218,28 +307,41 @@ function bind() {
   const app = $('#app');
   app.onclick = (e) => {
     const g = e.target.closest('[data-g]'); if (g) { S.lock = {}; newBeat({ genre: g.dataset.g, fresh: true }); return; }
+    const tb = e.target.closest('[data-tab]'); if (tb) { S.tab = tb.dataset.tab; render(); return; }
+    if (e.target.closest('#instx')) { try { localStorage.setItem('bl.noinst', '1'); } catch { /* sin almacenamiento */ } render(); return; }
     const bar = e.target.closest('[data-bar]'); if (bar) { S.bar = +bar.dataset.bar; S.follow = false; renderGrid(); return; }
-    const c = e.target.closest('.cell'); if (c) { ensureCtx(); if (!graph) graph = createGraph(ctx, S.beat); toggleCell(c.dataset.t, S.bar * 16 + +c.dataset.s); return; }
+    const c = e.target.closest('.cell'); if (c) { ensureCtx(); ensureGraph(); toggleCell(c.dataset.t, S.bar * 16 + +c.dataset.s); return; }
     const bpm = e.target.closest('[data-bpm]'); if (bpm) { S.beat.bpm = Math.max(55, Math.min(170, S.beat.bpm + +bpm.dataset.bpm)); if (S.playing) start(S.mode); persistCurrent(); render(); return; }
     const row = e.target.closest('[data-a]');
     if (row && row.closest('.mrow')) {
       const t = row.closest('.mrow').dataset.t, a = row.dataset.a;
       if (a === 'mute') { S.beat.mix[t].mute = !S.beat.mix[t].mute; if (graph) applyMix(graph, S.beat); touched(); render(); }
       if (a === 'lock') { S.lock[t] = !S.lock[t]; render(); }
-      if (a === 'dice') { S.beat = rerollTrack(S.beat, t); if (S.playing) start(S.mode); persistCurrent(); render(); }
-      if (a === 'prev') { ensureCtx(); const g2 = graph || createGraph(ctx, S.beat); preview(g2, t, S.beat); }
+      if (a === 'dice') { pushHist(); S.beat = rerollTrack(S.beat, t); if (S.playing) start(S.mode); persistCurrent(); render(); }
+      if (a === 'prev') { ensureCtx(); preview(ensureGraph(), t, S.beat); }
       return;
     }
-    if (row && row.classList.contains('rl')) { ensureCtx(); const g2 = graph || createGraph(ctx, S.beat); preview(g2, row.dataset.t, S.beat); return; }
+    if (row && row.classList.contains('rl')) { ensureCtx(); preview(ensureGraph(), row.dataset.t, S.beat); return; }
     const id = e.target.closest('button')?.id;
     if (id === 'play') { if (S.playing) stop(); else { S.follow = true; start('loop'); } }
     if (id === 'gen') { ensureCtx(); S.follow = true; newBeat({}); if (!S.playing) start('loop'); }
+    if (id === 'undo') undo();
+    if (id === 'redo') redo();
+    if (id === 'mut') mutate();
+    if (id === 'tap') tapTempo();
+    if (id === 'rec') { S.rec = !S.rec; S.recStarted = false; render(); }
     if (id === 'inst') doInstall();
     if (id === 'save') save();
     if (id === 'lib') openLibrary();
     if (id === 'exp') openExport();
     if (id === 'cfg' || id === 'ver') openSettings();
   };
+  app.onpointerdown = (e) => {
+    const p = e.target.closest('[data-pad]'); if (p) { e.preventDefault(); hitPad(p.dataset.pad); return; }
+    const f = e.target.closest('[data-fx]'); if (f) { e.preventDefault(); S.fxOn = f.dataset.fx; f.classList.add('hit'); fxStart(S.fxOn); }
+  };
+  const fxEnd = () => { if (S.fxOn) { fxStop(S.fxOn); document.querySelectorAll('[data-fx]').forEach((x) => x.classList.remove('hit')); S.fxOn = null; } };
+  app.onpointerup = fxEnd; app.onpointercancel = fxEnd; app.onpointerleave = fxEnd;
   app.oninput = (e) => {
     const t = e.target;
     if (t.dataset.vol) { S.beat.mix[t.dataset.vol].vol = t.value / 100; if (graph) applyMix(graph, S.beat); touchedLite(); }

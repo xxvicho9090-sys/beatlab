@@ -33,7 +33,7 @@ select.key{background:var(--s2);border:1px solid var(--line);border-radius:10px;
 .cell{height:34px;border-radius:3px;background:#1A1A21}
 .cell.b4{background:#23232C}
 .cell.on{background:var(--ac)}
-.cell.play{outline:2px solid var(--tx);outline-offset:-2px}
+.cell.ph{outline:2px solid var(--tx);outline-offset:-2px}
 .cell.on.bass,.cell.on.lead{background:var(--ac2)}
 .cell.on.chord{background:#7A8CFF}
 .cell.on.hat,.cell.on.ohat,.cell.on.perc{background:#E8E2D4}
@@ -77,3 +77,33 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;heigh
 .pad{height:56px;border-radius:12px;background:var(--s2);font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--mut);text-transform:uppercase}
 .pad:active{background:var(--ac);color:#0B0B0E}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+/* v1.2: pestañas, héroe con visualizador y barra inferior simple */
+.top{margin-bottom:12px;align-items:center}
+.logo{font-size:38px}
+.hbtns{display:flex;gap:6px;align-items:center}
+.hbtns .ib{width:44px;height:44px;background:var(--s1)}
+.chip-v{min-height:44px;padding:0 10px;display:grid;place-items:center;font-size:11px}
+.inst{display:flex;align-items:center;gap:8px;background:var(--s1);border-radius:12px;padding:6px 6px 6px 14px;margin-bottom:12px;font-size:13px}
+.inst span{flex:1;color:var(--mut)}
+.mini{min-height:44px;padding:0 14px;border-radius:10px;background:var(--s2);font-weight:700;font-size:13px;display:grid;place-items:center;color:var(--tx);text-decoration:none}
+.mini.pri{background:var(--ac);color:#0B0B0E}.mini.x{padding:0;width:44px;color:var(--mut)}
+.hero{background:var(--s1);border-radius:16px;padding:14px 14px 10px;margin-bottom:12px}
+.hero-n{font-family:var(--disp);font-weight:900;font-size:30px;line-height:1.05;margin-top:2px}
+#viz{width:100%;height:56px;display:block;margin-top:10px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);background:var(--s1);border-radius:12px;padding:4px;margin-bottom:14px;position:sticky;top:0;z-index:5}
+.seg button{min-height:44px;border-radius:9px;font-weight:700;font-size:14px;color:var(--mut)}
+.seg button.on{background:var(--tx);color:#0B0B0E}
+.hint{color:var(--mut);font-size:12px;line-height:1.4;margin:12px 2px 0}
+.dock-main{align-items:center}
+.dock .play.saved{color:var(--ac);border-color:var(--ac)}
+#app{padding-bottom:calc(env(safe-area-inset-bottom) + 100px)}
+/* v1.2: pads, efectos, herramientas */
+.seg{grid-template-columns:repeat(4,1fr)}.seg button{font-size:13px}
+.pads3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.pads4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.pad{min-height:84px;touch-action:manipulation;user-select:none;-webkit-user-select:none;border-radius:16px;background:var(--s1);border:1px solid var(--line);font-family:var(--disp);font-weight:900;font-size:20px;letter-spacing:.04em;color:var(--tx);text-transform:uppercase}
+.pad.fx{min-height:64px;font-size:16px;color:var(--ac2);border-color:#4a3a14}
+.pad.hit,.pad:active{background:var(--ac);color:#0B0B0E;border-color:var(--ac)}
+.pad.fx.hit,.pad.fx:active{background:var(--ac2)}
+.tools{display:flex;gap:8px;margin-bottom:6px}.tools .mini{flex:1}
+.sec-h .mini{min-height:36px;padding:0 12px}

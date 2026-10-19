@@ -41,6 +41,7 @@ export function createGraph(ctx, beat) {
   const out = ctx.createGain(); out.gain.value = 0.92;
   pre.connect(hp).connect(lp).connect(sat).connect(comp).connect(lim).connect(out).connect(ctx.destination);
   g.out = out;
+  if (!(ctx instanceof OfflineAudioContext)) { const an = ctx.createAnalyser(); an.fftSize = 256; an.smoothingTimeConstant = 0.75; out.connect(an); g.an = an; }
 
   const rev = ctx.createConvolver(); rev.buffer = makeIR(ctx, fx.revTime || 2.2, 2.6);
   const revIn = ctx.createGain(), revOut = ctx.createGain(); revOut.gain.value = 0.9;
@@ -53,6 +54,9 @@ export function createGraph(ctx, beat) {
   const dlyIn = ctx.createGain();
   dlyIn.connect(dly); dly.connect(dlp).connect(fb).connect(dly); dlp.connect(pre);
 
+  g.lp = lp; g.baseLp = fx.lp || 20000;
+  g.thrD = ctx.createGain(); g.thrD.gain.value = 0; sat.connect(g.thrD).connect(dlyIn);
+  g.thrR = ctx.createGain(); g.thrR.gain.value = 0; sat.connect(g.thrR).connect(revIn);
   const sendRev = { snare: 0.12, clap: 0.18, lead: 0.28, chord: 0.3, perc: 0.1 };
   const sendDly = { lead: 0.2, snare: 0.04, chord: 0.06 };
   TRACKS.forEach((t, k) => {
