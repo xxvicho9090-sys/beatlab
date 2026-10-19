@@ -22,7 +22,7 @@ export const PRESETS = {
     kick: { base: [0], extra: [3, 6, 7, 10, 11, 14], n: [2, 4] }, snare: { pos: [8], clap: true },
     hat: { grid: 2, roll: 0.35, accent: [0, 4, 8, 12] }, ohat: { pos: [14], p: 0.5 }, perc: null,
     bass: 'kick', slide: 0.12, lead: { dens: 0.28, range: [0, 9], oct: 1 }, chordRhythm: 'whole', prog: [[0, 5, 2, 6], [0, 3, 5, 4], [0, 0, 5, 6]],
-    kit: { kick: kick(135, 44, 0.55, { drive: 2 }), snare: SN({ tone: 200, decay: 0.2 }), clap: { hz: 1500, decay: 0.2 }, hat: { hp: 7500, decay: 0.035, open: 0.2 }, perc: 'rim', bass: { type: '808', decay: 1.1, sustain: 0.6, drive: 2.4 }, lead: 'bell', chord: 'pad', fx: { rev: 0.9, dly: 0.9, sat: 1.4 } },
+    kit: { kick: kick(135, 44, 0.55, { drive: 2 }), snare: SN({ tone: 200, decay: 0.2 }), clap: { hz: 1500, decay: 0.2 }, hat: { hp: 7500, decay: 0.035, open: 0.2 }, perc: 'rim', bass: { type: '808', decay: 1.1, sustain: 0.6, drive: 2.4 }, lead: 'bell', chord: 'pad', fx: { gain: 0.6, rev: 0.9, dly: 0.9, sat: 1.4 } },
   },
   melodic: {
     name: 'Trap melódico', city: 'Atlanta / Miami', era: '2016 – hoy', refs: 'Future · Lil Uzi Vert · Juice WRLD · Roddy Ricch · Lil Baby',
@@ -30,7 +30,7 @@ export const PRESETS = {
     kick: { base: [0], extra: [7, 10, 11, 14], n: [1, 3] }, snare: { pos: [8], clap: true },
     hat: { grid: 2, roll: 0.3, accent: [0, 4, 8, 12] }, ohat: { pos: [6, 14], p: 0.35 }, perc: null,
     bass: 'kick', slide: 0.08, lead: { dens: 0.55, range: [2, 14], oct: 1, arp: true }, chordRhythm: 'half', prog: [[0, 5, 2, 6], [5, 6, 0, 0], [0, 2, 5, 4]],
-    kit: { kick: kick(130, 46, 0.45), snare: SN({ tone: 210, decay: 0.16 }), clap: { hz: 1700, decay: 0.16 }, hat: { hp: 8000, decay: 0.03, open: 0.18 }, perc: 'rim', bass: { type: '808', decay: 0.9, sustain: 0.55, drive: 2 }, lead: 'pluck', chord: 'keys', fx: { rev: 1.1, dly: 1.2 } },
+    kit: { kick: kick(130, 46, 0.45), snare: SN({ tone: 210, decay: 0.16 }), clap: { hz: 1700, decay: 0.16 }, hat: { hp: 8000, decay: 0.03, open: 0.18 }, perc: 'rim', bass: { type: '808', decay: 0.9, sustain: 0.55, drive: 2 }, lead: 'pluck', chord: 'keys', fx: { gain: 0.75, rev: 1.1, dly: 1.2 } },
   },
   rage: {
     name: 'Rage', city: 'Atlanta', era: '2020 – hoy', refs: 'Playboi Carti · Ken Carson · Yeat · Destroy Lonely',
@@ -38,7 +38,7 @@ export const PRESETS = {
     kick: { base: [0, 6], extra: [3, 10, 11, 14], n: [1, 3] }, snare: { pos: [8], clap: true },
     hat: { grid: 2, roll: 0.25, accent: [0, 8] }, ohat: null, perc: null,
     bass: 'kick', slide: 0.2, lead: { dens: 0.4, range: [7, 16], oct: 1 }, chordRhythm: 'half', prog: [[0, 6, 5, 6], [0, 0, 5, 4]],
-    kit: { kick: kick(150, 42, 0.5, { drive: 3, click: 0.4 }), snare: SN({ tone: 220, decay: 0.15, noise: 1 }), clap: { hz: 1800, decay: 0.14 }, hat: { hp: 8500, decay: 0.03, open: 0.16 }, perc: 'rim', bass: { type: '808', decay: 1, sustain: 0.65, drive: 3.4 }, lead: 'rage', chord: 'pad', fx: { rev: 0.7, dly: 0.8, sat: 2 } },
+    kit: { kick: kick(150, 42, 0.5, { drive: 3, click: 0.4 }), snare: SN({ tone: 220, decay: 0.15, noise: 1 }), clap: { hz: 1800, decay: 0.14 }, hat: { hp: 8500, decay: 0.03, open: 0.16 }, perc: 'rim', bass: { type: '808', decay: 1, sustain: 0.65, drive: 3.4 }, lead: 'rage', chord: 'pad', fx: { gain: 0.5, rev: 0.7, dly: 0.8, sat: 2 } },
   },
   boombap: {
     name: 'Boom bap', city: 'Nueva York', era: '1988 – 2000', refs: 'Nas · DJ Premier · Pete Rock · Wu-Tang Clan · Mobb Deep · Notorious B.I.G.',
@@ -70,7 +70,7 @@ export const PRESETS = {
     kick: { base: [0], extra: [3, 7, 10, 11, 14], n: [2, 3] }, snare: { pos: [8], clap: false },
     hat: { grid: 2, roll: 0.45, accent: [0, 8], trip: true }, ohat: null, perc: 'rim',
     bass: 'kick', slide: 0.35, lead: { dens: 0.22, range: [0, 7], oct: 1 }, chordRhythm: 'whole', prog: [[0, 1, 0, 6], [0, 5, 1, 0]],
-    kit: { kick: kick(140, 43, 0.6, { drive: 2.2 }), snare: SN({ tone: 210, decay: 0.2, noise: 0.95 }), clap: { hz: 1500, decay: 0.2 }, hat: { hp: 7800, decay: 0.03, open: 0.14 }, perc: 'rim', bass: { type: '808', decay: 1.2, sustain: 0.6, drive: 2.6 }, lead: 'bell', chord: 'strings', fx: { rev: 1.1, dly: 0.9, sat: 1.5 } },
+    kit: { kick: kick(140, 43, 0.6, { drive: 2.2 }), snare: SN({ tone: 210, decay: 0.2, noise: 0.95 }), clap: { hz: 1500, decay: 0.2 }, hat: { hp: 7800, decay: 0.03, open: 0.14 }, perc: 'rim', bass: { type: '808', decay: 1.2, sustain: 0.6, drive: 2.6 }, lead: 'bell', chord: 'strings', fx: { gain: 0.65, rev: 1.1, dly: 0.9, sat: 1.5 } },
   },
   nydrill: {
     name: 'Drill Nueva York', city: 'Brooklyn', era: '2019 – hoy', refs: 'Pop Smoke · Fivio Foreign · Sheff G · Sleepy Hallow · Kay Flock',
@@ -78,7 +78,7 @@ export const PRESETS = {
     kick: { base: [0, 6], extra: [3, 10, 13, 14], n: [2, 3] }, snare: { pos: [8], clap: true },
     hat: { grid: 2, roll: 0.5, accent: [0, 8], trip: true }, ohat: { pos: [14], p: 0.3 }, perc: 'rim',
     bass: 'kick', slide: 0.45, lead: { dens: 0.3, range: [0, 9], oct: 1 }, chordRhythm: 'half', prog: [[0, 5, 1, 0], [0, 6, 5, 0]],
-    kit: { kick: kick(138, 42, 0.62, { drive: 2.4 }), snare: SN({ tone: 215, decay: 0.19 }), clap: { hz: 1600, decay: 0.19 }, hat: { hp: 8000, decay: 0.03, open: 0.14 }, perc: 'rim', bass: { type: '808', decay: 1.3, sustain: 0.62, drive: 2.8 }, lead: 'pluck', chord: 'strings', fx: { rev: 0.9, dly: 1, sat: 1.6 } },
+    kit: { kick: kick(138, 42, 0.62, { drive: 2.4 }), snare: SN({ tone: 215, decay: 0.19 }), clap: { hz: 1600, decay: 0.19 }, hat: { hp: 8000, decay: 0.03, open: 0.14 }, perc: 'rim', bass: { type: '808', decay: 1.3, sustain: 0.62, drive: 2.8 }, lead: 'pluck', chord: 'strings', fx: { gain: 0.65, rev: 0.9, dly: 1, sat: 1.6 } },
   },
   crunk: {
     name: 'Crunk', city: 'Atlanta / Memphis', era: '2000 – 2006', refs: 'Lil Jon · Three 6 Mafia · Ying Yang Twins · Ludacris · Youngbloodz',
@@ -86,7 +86,7 @@ export const PRESETS = {
     kick: { base: [0, 8], extra: [3, 6, 11, 14], n: [1, 2] }, snare: { pos: [4, 12], clap: true },
     hat: { grid: 2, roll: 0, accent: [0, 4, 8, 12] }, ohat: { pos: [2, 6, 10, 14], p: 0.6 }, perc: null,
     bass: 'kick', slide: 0, lead: { dens: 0.3, range: [0, 7], oct: 0, stab: true }, chordRhythm: 'stab', prog: [[0, 0, 5, 6], [0, 3, 0, 4]],
-    kit: { kick: kick(125, 46, 0.5, { drive: 2.2 }), snare: SN({ tone: 190, decay: 0.2, noise: 1 }), clap: { hz: 1300, decay: 0.26 }, hat: { hp: 6500, decay: 0.05, open: 0.24 }, perc: 'rim', bass: { type: '808', decay: 1, sustain: 0.6, drive: 2.4 }, lead: 'stab', chord: 'stab', fx: { rev: 0.5, dly: 0.3, sat: 1.8 } },
+    kit: { kick: kick(125, 46, 0.5, { drive: 2.2 }), snare: SN({ tone: 190, decay: 0.2, noise: 1 }), clap: { hz: 1300, decay: 0.26 }, hat: { hp: 6500, decay: 0.05, open: 0.24 }, perc: 'rim', bass: { type: '808', decay: 1, sustain: 0.6, drive: 2.4 }, lead: 'stab', chord: 'stab', fx: { gain: 0.8, rev: 0.5, dly: 0.3, sat: 1.8 } },
   },
   phonk: {
     name: 'Phonk', city: 'Memphis', era: '1995 – hoy', refs: 'Three 6 Mafia · DJ Paul · Gangsta Boo · Tommy Wright III · Kordhell',
@@ -94,7 +94,7 @@ export const PRESETS = {
     kick: { base: [0], extra: [3, 6, 7, 10, 11, 14], n: [2, 4] }, snare: { pos: [8], clap: true },
     hat: { grid: 2, roll: 0.3, accent: [0, 4, 8, 12], trip: true }, ohat: { pos: [14], p: 0.5 }, perc: 'rim',
     bass: 'kick', slide: 0.2, lead: { dens: 0.5, range: [0, 9], oct: 1, cow: true }, chordRhythm: 'whole', prog: [[0, 1, 0, 6], [0, 5, 0, 4]],
-    kit: { kick: kick(145, 42, 0.6, { drive: 3, click: 0.4 }), snare: SN({ tone: 195, decay: 0.2, noise: 1 }), clap: { hz: 1400, decay: 0.22 }, hat: { hp: 7000, decay: 0.04, open: 0.2 }, perc: 'rim', bass: { type: '808', decay: 1.1, sustain: 0.65, drive: 3.6 }, lead: 'cowbell', chord: 'pad', fx: { rev: 0.7, dly: 0.7, sat: 2.2, lp: 14000 } },
+    kit: { kick: kick(145, 42, 0.6, { drive: 3, click: 0.4 }), snare: SN({ tone: 195, decay: 0.2, noise: 1 }), clap: { hz: 1400, decay: 0.22 }, hat: { hp: 7000, decay: 0.04, open: 0.2 }, perc: 'rim', bass: { type: '808', decay: 1.1, sustain: 0.65, drive: 3.6 }, lead: 'cowbell', chord: 'pad', fx: { gain: 0.55, rev: 0.7, dly: 0.7, sat: 2.2, lp: 14000 } },
   },
   screwed: {
     name: 'Chopped & screwed', city: 'Houston', era: '1990 – hoy', refs: 'DJ Screw · UGK · Slim Thug · Travis Scott · Paul Wall',
@@ -102,7 +102,7 @@ export const PRESETS = {
     kick: { base: [0], extra: [6, 10, 11], n: [1, 2] }, snare: { pos: [8], clap: true },
     hat: { grid: 2, roll: 0.12, accent: [0, 8], sparse: 0.15 }, ohat: { pos: [14], p: 0.5 }, perc: 'rim',
     bass: 'sustain', slide: 0.1, lead: { dens: 0.2, range: [0, 9], oct: 1 }, chordRhythm: 'whole', prog: [[0, 5, 2, 6], [0, 3, 5, 4]],
-    kit: { kick: kick(120, 44, 0.7, { drive: 2 }), snare: SN({ tone: 170, decay: 0.28 }), clap: { hz: 1100, decay: 0.3 }, hat: { hp: 6000, decay: 0.05, open: 0.28 }, perc: 'rim', bass: { type: '808', decay: 1.6, sustain: 0.7, drive: 2.2 }, lead: 'pad', chord: 'pad', fx: { rev: 1.4, dly: 1.1, revTime: 3, lp: 9000 } },
+    kit: { kick: kick(120, 44, 0.7, { drive: 2 }), snare: SN({ tone: 170, decay: 0.28 }), clap: { hz: 1100, decay: 0.3 }, hat: { hp: 6000, decay: 0.05, open: 0.28 }, perc: 'rim', bass: { type: '808', decay: 1.6, sustain: 0.7, drive: 2.2 }, lead: 'pad', chord: 'pad', fx: { gain: 0.7, rev: 1.4, dly: 1.1, revTime: 3, lp: 9000 } },
   },
   hyphy: {
     name: 'Hyphy', city: 'Área de la Bahía', era: '2002 – 2008', refs: 'E-40 · Mac Dre · Too Short · Keak da Sneak · The Pack',
@@ -126,7 +126,7 @@ export const PRESETS = {
     kick: { base: [0], extra: [10, 14], n: [1, 2] }, snare: { pos: [8], clap: true },
     hat: { grid: 4, roll: 0.1, accent: [0, 8], sparse: 0.3 }, ohat: { pos: [14], p: 0.5 }, perc: null,
     bass: 'sustain', slide: 0.1, lead: { dens: 0.25, range: [4, 14], oct: 1 }, chordRhythm: 'whole', prog: [[0, 5, 2, 6], [0, 3, 0, 5]], sevenths: true,
-    kit: { kick: kick(118, 46, 0.5, { drive: 1.4, click: 0.1 }), snare: SN({ tone: 180, decay: 0.28, noise: 0.7 }), clap: { hz: 1300, decay: 0.3 }, hat: { hp: 7000, decay: 0.05, open: 0.3 }, perc: 'rim', bass: { type: '808', decay: 1.3, sustain: 0.6, drive: 1.8 }, lead: 'bell', chord: 'strings', fx: { rev: 1.7, dly: 1.3, revTime: 3.4, sat: 1.1 } },
+    kit: { kick: kick(118, 46, 0.5, { drive: 1.4, click: 0.1 }), snare: SN({ tone: 180, decay: 0.28, noise: 0.7 }), clap: { hz: 1300, decay: 0.3 }, hat: { hp: 7000, decay: 0.05, open: 0.3 }, perc: 'rim', bass: { type: '808', decay: 1.3, sustain: 0.6, drive: 1.8 }, lead: 'bell', chord: 'strings', fx: { gain: 0.85, rev: 1.7, dly: 1.3, revTime: 3.4, sat: 1.1 } },
   },
 };
 export const ORDER = ['trap', 'melodic', 'rage', 'boombap', 'soul', 'gfunk', 'chidrill', 'nydrill', 'crunk', 'phonk', 'screwed', 'hyphy', 'lofi', 'cloud'];

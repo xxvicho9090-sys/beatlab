@@ -38,7 +38,7 @@ export function createGraph(ctx, beat) {
   comp.threshold.value = -16; comp.knee.value = 8; comp.ratio.value = 3.2; comp.attack.value = 0.012; comp.release.value = 0.18;
   const lim = ctx.createDynamicsCompressor();
   lim.threshold.value = -2.5; lim.knee.value = 0; lim.ratio.value = 20; lim.attack.value = 0.001; lim.release.value = 0.08;
-  const out = ctx.createGain(); out.gain.value = 0.92;
+  const out = ctx.createGain(); g.level = 1.15 * (fx.gain || 1); out.gain.value = g.level;
   pre.connect(hp).connect(lp).connect(sat).connect(comp).connect(lim).connect(out).connect(ctx.destination);
   g.out = out;
   if (!(ctx instanceof OfflineAudioContext)) { const an = ctx.createAnalyser(); an.fftSize = 256; an.smoothingTimeConstant = 0.75; out.connect(an); g.an = an; }
@@ -274,18 +274,21 @@ export function startVinyl(g, t0, t1) {
 }
 
 // ---- Canción: estructura por secciones ----
-export function songPlan(beat) {
-  const all = Object.fromEntries(TRACKS.map((t) => [t, true]));
-  const only = (...ks) => Object.fromEntries(TRACKS.map((t) => [t, ks.includes(t)]));
-  const secs = [
-    { name: 'Intro', loops: 1, mask: only('chord', 'lead', 'hat', 'perc') },
-    { name: 'Verso 1', loops: 2, mask: only('kick', 'snare', 'clap', 'hat', 'ohat', 'perc', 'bass', 'chord') },
-    { name: 'Estribillo', loops: 2, mask: all },
-    { name: 'Verso 2', loops: 2, mask: only('kick', 'snare', 'clap', 'hat', 'ohat', 'perc', 'bass', 'chord', 'lead') },
-    { name: 'Estribillo', loops: 2, mask: all },
-    { name: 'Puente', loops: 1, mask: only('chord', 'lead', 'perc', 'bass') },
-    { name: 'Final', loops: 1, mask: only('chord', 'lead', 'kick', 'snare') },
+const maskOf = (...ks) => Object.fromEntries(TRACKS.map((t) => [t, ks.includes(t)]));
+export function defaultSong() {
+  const drums = ['kick', 'snare', 'clap', 'hat', 'ohat', 'perc', 'bass', 'chord'];
+  return [
+    { name: 'Intro', loops: 1, mask: maskOf('chord', 'lead', 'hat', 'perc') },
+    { name: 'Verso 1', loops: 2, mask: maskOf(...drums) },
+    { name: 'Estribillo', loops: 2, mask: maskOf(...TRACKS) },
+    { name: 'Verso 2', loops: 2, mask: maskOf(...drums, 'lead') },
+    { name: 'Estribillo', loops: 2, mask: maskOf(...TRACKS) },
+    { name: 'Puente', loops: 1, mask: maskOf('chord', 'lead', 'perc', 'bass') },
+    { name: 'Final', loops: 1, mask: maskOf('chord', 'lead', 'kick', 'snare') },
   ];
+}
+export function songPlan(beat) {
+  const secs = (beat.song && beat.song.length ? beat.song : defaultSong()).map((s) => ({ ...s }));
   let a = 0; secs.forEach((s) => { s.from = a; a += s.loops; }); return { secs, loops: a };
 }
 export function sectionAt(plan, loop) { return plan.secs.find((s) => loop >= s.from && loop < s.from + s.loops) || null; }

@@ -5,7 +5,7 @@ import './style.css';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
-import { TRACKS, TRACK_LABEL, createGraph, applyMix, scheduleSteps, songPlan, sectionAt, preview, startVinyl, renderBeat } from './audio.js';
+import { TRACKS, TRACK_LABEL, defaultSong, createGraph, applyMix, scheduleSteps, songPlan, sectionAt, preview, startVinyl, renderBeat } from './audio.js';
 import { PRESETS, ORDER, SCALES, KEYS, generate, rerollTrack } from './gen.js';
 import { listBeats, saveBeat, deleteBeat, importBeats, initStore, getKV, setKV } from './store.js';
 import { zipSync } from 'fflate';
@@ -109,6 +109,7 @@ function pushHist() { hist.u.push(JSON.stringify(S.beat)); if (hist.u.length > 4
 function restore(json) { S.beat = JSON.parse(json); if (S.playing) { const keep = S.mode; start(keep); } persistCurrent(); render(); }
 function undo() { if (!hist.u.length) return toast('Nada que deshacer'); hist.r.push(JSON.stringify(S.beat)); restore(hist.u.pop()); }
 function redo() { if (!hist.r.length) return toast('Nada que rehacer'); hist.u.push(JSON.stringify(S.beat)); restore(hist.r.pop()); }
+function editSong(fn) { pushHist(); if (!S.beat.song) S.beat.song = defaultSong(); fn(S.beat.song); touched(); render(); }
 function mutate() {
   pushHist(); const b = S.beat, r = Math.random, D = b.drum;
   ['kick', 'clap', 'hat', 'ohat', 'perc'].forEach((t) => { for (let k = 0; k < 2; k++) { const s = Math.floor(r() * 64); if (t === 'kick' && s % 16 === 0) continue; if (r() < (t === 'hat' ? 0.55 : 0.3)) { D[t][s] = D[t][s] > 0 ? 0 : t === 'hat' ? 0.6 : 0.8; if (t === 'hat') D.roll[s] = 0; } } });
@@ -139,14 +140,14 @@ function hitPad(t) {
 let fxTimer = 0;
 function fxStart(kind) {
   const g = ensureGraph(), now = ctx.currentTime, sd = 60 / S.beat.bpm / 4;
-  if (kind === 'stutter') { g.out.gain.cancelScheduledValues(now); for (let k = 0; k < 64; k++) g.out.gain.setValueAtTime(k % 2 ? 0.92 : 0.0001, now + k * sd * 0.5); }
+  if (kind === 'stutter') { g.out.gain.cancelScheduledValues(now); for (let k = 0; k < 64; k++) g.out.gain.setValueAtTime(k % 2 ? g.level : 0.0001, now + k * sd * 0.5); }
   if (kind === 'eco') g.thrD.gain.setTargetAtTime(0.6, now, 0.01);
   if (kind === 'verb') g.thrR.gain.setTargetAtTime(0.35, now, 0.02);
   if (kind === 'radio') g.lp.frequency.setTargetAtTime(1400, now, 0.03);
 }
 function fxStop(kind) {
   if (!graph) return; const now = ctx.currentTime;
-  if (kind === 'stutter') { graph.out.gain.cancelScheduledValues(now); graph.out.gain.setTargetAtTime(0.92, now, 0.01); }
+  if (kind === 'stutter') { graph.out.gain.cancelScheduledValues(now); graph.out.gain.setTargetAtTime(graph.level, now, 0.01); }
   if (kind === 'eco') graph.thrD.gain.setTargetAtTime(0, now + 0.05, 0.05);
   if (kind === 'verb') graph.thrR.gain.setTargetAtTime(0, now + 0.3, 0.3);
   if (kind === 'radio') graph.lp.frequency.setTargetAtTime(graph.baseLp, now, 0.08);
@@ -254,7 +255,9 @@ function render() {
     <div class="card"><div class="mono">Escala</div><select class="key" id="scale" aria-label="Escala">${Object.entries(SCALES).map(([k, v]) => `<option value="${k}" ${k === b.scale ? 'selected' : ''}>${v.n}</option>`).join('')}</select>
       <div class="mono" style="margin-top:12px">Swing · ${Math.round(b.swing * 100)}%</div><input type="range" id="swing" min="50" max="72" value="${Math.round(b.swing * 100)}" aria-label="Swing"></div>
     <div class="sec-h"><div class="mono">Estructura de canción</div></div>
-    <div class="song">${songPlan(b).secs.map((s) => `<span>${s.name}${s.loops > 1 ? ' ×' + s.loops : ''}</span>`).join('')}</div>`;
+    <div class="song">${songPlan(b).secs.map((s) => `<span>${esc(s.name)}${s.loops > 1 ? ' ×' + s.loops : ''}</span>`).join('')}</div>
+    <div class="secs">${songPlan(b).secs.map((s, i) => `<div class="secrow"><div class="sec-top"><input class="nm2" value="${esc(s.name)}" data-sn="${i}" maxlength="18" aria-label="Nombre de la sección"><div class="stp"><button class="ib" data-sl="${i}:-1" aria-label="Menos repeticiones">−</button><b>×${s.loops}</b><button class="ib" data-sl="${i}:1" aria-label="Más repeticiones">+</button></div><button class="ib" data-sd="${i}" aria-label="Quitar sección">${IC.trash}</button></div><div class="chips">${TRACKS.map((t) => `<button class="tc ${s.mask[t] ? 'on' : ''}" data-sm="${i}:${t}">${TRACK_LABEL[t].split(' ')[0]}</button>`).join('')}</div></div>`).join('')}</div>
+    <div class="tools"><button class="mini" id="secadd">+ Sección</button><button class="mini" id="secreset">Restablecer</button><button class="mini pri" id="playsong">▶ Escuchar canción</button></div>`;
   const patron = `
     <div class="tools"><button class="mini" id="undo">↶ Deshacer</button><button class="mini" id="redo">↷ Rehacer</button><button class="mini" id="mut">Mutar</button></div>
     <div class="sec-h"><div class="mono">Compás</div><div class="tabs">${[0, 1, 2, 3].map((i) => `<button class="tab ${i === S.bar ? 'on' : ''}" data-bar="${i}">${i + 1}</button>`).join('')}</div></div>
@@ -307,6 +310,12 @@ function bind() {
   const app = $('#app');
   app.onclick = (e) => {
     const g = e.target.closest('[data-g]'); if (g) { S.lock = {}; newBeat({ genre: g.dataset.g, fresh: true }); return; }
+    const sl = e.target.closest('[data-sl]'); if (sl) { const [i, d] = sl.dataset.sl.split(':').map(Number); editSong((sg) => { sg[i].loops = Math.max(1, Math.min(8, sg[i].loops + d)); }); return; }
+    const sd = e.target.closest('[data-sd]'); if (sd) { editSong((sg) => { if (sg.length > 1) sg.splice(+sd.dataset.sd, 1); }); return; }
+    const sm = e.target.closest('[data-sm]'); if (sm) { const [i, t] = sm.dataset.sm.split(':'); editSong((sg) => { sg[+i].mask[t] = !sg[+i].mask[t]; }); return; }
+    if (e.target.closest('#secadd')) { editSong((sg) => { if (sg.length < 14) sg.push({ name: 'Sección', loops: 1, mask: Object.fromEntries(TRACKS.map((t) => [t, true])) }); }); return; }
+    if (e.target.closest('#secreset')) { editSong((sg) => { sg.splice(0, sg.length, ...defaultSong()); }); return; }
+    if (e.target.closest('#playsong')) { ensureCtx(); S.follow = true; start('song'); return; }
     const tb = e.target.closest('[data-tab]'); if (tb) { S.tab = tb.dataset.tab; render(); return; }
     if (e.target.closest('#instx')) { try { localStorage.setItem('bl.noinst', '1'); } catch { /* sin almacenamiento */ } render(); return; }
     const bar = e.target.closest('[data-bar]'); if (bar) { S.bar = +bar.dataset.bar; S.follow = false; renderGrid(); return; }
@@ -349,6 +358,7 @@ function bind() {
   };
   app.onchange = (e) => {
     const t = e.target;
+    if (t.dataset.sn !== undefined) { editSong((sg) => { sg[+t.dataset.sn].name = (t.value.trim() || 'Sección').slice(0, 18); }); return; }
     if (t.id === 'key' || t.id === 'scale') {
       const b = S.beat, key = t.id === 'key' ? +t.value : b.key, scale = t.id === 'scale' ? t.value : b.scale;
       const nb = generate(b.genre, { seed: b.seed, bpm: b.bpm, key, scale, prog: b.prog });
